@@ -1,0 +1,656 @@
+<title>Sixes Blitz</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a black ground scoreboard on top, the pitch in the middle, a shot pad under the thumbs; cards slide over the ground between overs. */
+:root{
+  --bg:#eaf1ea; --surface:#ffffff; --ink:#14231b; --muted:#56685d; --line:#cbd8ce;
+  --turf:#1f7a44; --cherry:#b3202c; --blitz:#d99a00; --on-accent:#ffffff; --on-blitz:#1c1400;
+  --board:#10231a; --board-ink:#f4f1e2; --board-dim:#9db3a4; --board-line:#2a4636;
+  --scrim:rgba(234,241,234,.86); --callout:#ffffff; --callout-shadow:rgba(0,0,0,.55);
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0b1410; --surface:#15231b; --ink:#e9f1ea; --muted:#93a79a; --line:#273c30;
+  --turf:#43b36c; --cherry:#e4525c; --blitz:#f2c230; --on-accent:#ffffff; --on-blitz:#1c1400;
+  --board:#050b08; --board-ink:#f4f1e2; --board-dim:#8fa698; --board-line:#1e3327;
+  --scrim:rgba(7,13,10,.84); --callout:#ffffff; --callout-shadow:rgba(0,0,0,.7); color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0b1410; --surface:#15231b; --ink:#e9f1ea; --muted:#93a79a; --line:#273c30;
+  --turf:#43b36c; --cherry:#e4525c; --blitz:#f2c230; --on-accent:#ffffff; --on-blitz:#1c1400;
+  --board:#050b08; --board-ink:#f4f1e2; --board-dim:#8fa698; --board-line:#1e3327;
+  --scrim:rgba(7,13,10,.84); --callout:#ffffff; --callout-shadow:rgba(0,0,0,.7); color-scheme:dark }
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:12px;box-sizing:border-box}
+*,*::before,*::after{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--blitz);outline-offset:2px}
+
+.app{position:relative;height:100%;min-height:560px;max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+
+/* scoreboard */
+.board{background:var(--board);color:var(--board-ink);border-radius:10px;padding:10px 14px;display:grid;gap:6px;font-variant-numeric:tabular-nums}
+.board-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.side{display:flex;align-items:baseline;gap:8px;min-width:0}
+.swatch{width:12px;height:12px;border-radius:2px;align-self:center;flex:none}
+.side b{font-family:var(--display);font-weight:800;font-size:34px;line-height:1;letter-spacing:.01em}
+.side span{font-family:var(--display);font-weight:600;font-size:18px;letter-spacing:.06em;text-transform:uppercase;color:var(--board-dim)}
+.overs{font-family:var(--display);font-weight:600;font-size:20px;letter-spacing:.04em;color:var(--board-dim)}
+.overs b{color:var(--board-ink);font-weight:800}
+.ctx{margin-left:auto;font-family:var(--display);font-weight:600;font-size:18px;letter-spacing:.05em;text-transform:uppercase}
+.badge{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.1em;background:var(--blitz);color:var(--on-blitz);padding:1px 8px;border-radius:3px;align-self:center}
+.board-sub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--board-line);padding-top:6px;font-size:13px;color:var(--board-dim);min-height:30px}
+.bats{min-width:0;flex:1 1 180px}
+.bats b{color:var(--board-ink);font-weight:600}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{min-width:22px;height:22px;padding:0 5px;border-radius:11px;display:grid;place-items:center;font-size:12px;font-weight:600;background:var(--board-line);color:var(--board-ink)}
+.chip.four{background:var(--turf);color:var(--on-accent)}
+.chip.six{background:var(--blitz);color:var(--on-blitz)}
+.chip.w{background:var(--cherry);color:var(--on-accent)}
+.mute{background:none;border:1px solid var(--board-line);color:var(--board-dim);border-radius:6px;font-size:12px;padding:3px 9px}
+
+/* ground */
+.stage{position:relative;flex:1 1 auto;min-height:260px;border-radius:10px;overflow:hidden;background:var(--board)}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.callout{position:absolute;left:0;right:0;top:9%;text-align:center;pointer-events:none;opacity:0;color:var(--callout);text-shadow:0 2px 0 var(--callout-shadow),0 0 18px var(--callout-shadow)}
+.callout b{display:block;font-family:var(--display);font-weight:800;font-size:clamp(38px,9vw,76px);line-height:.95;letter-spacing:.02em;text-transform:uppercase}
+.callout span{display:block;font-weight:600;font-size:15px;margin-top:4px}
+.callout.show{opacity:1;animation:pop .28s cubic-bezier(.2,1.4,.4,1)}
+.callout.six b{color:var(--blitz)} .callout.out b{color:var(--cherry);-webkit-text-stroke:1px var(--callout)}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* shot pad */
+.pad{display:grid;gap:6px}
+.padgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pb{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 4px;min-height:52px;display:grid;place-items:center;gap:0;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.pb i{font-style:normal;font-family:var(--display);font-weight:800;font-size:22px;line-height:1;letter-spacing:.05em;text-transform:uppercase}
+.pb small{font-size:11px;color:var(--muted);letter-spacing:.04em}
+.pb.loft{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.pb.loft small{color:var(--bg);opacity:.75}
+.pb:active{transform:translateY(1px)}
+.pad[data-off="1"] .pb{opacity:.45;pointer-events:none}
+.padhint{margin:0;font-size:12.5px;color:var(--muted);text-align:center;min-height:18px}
+@media (hover:none){ .keys{display:none} }
+
+/* cards over the ground */
+.overlay{position:absolute;inset:0;z-index:5;background:var(--scrim);border-radius:10px;overflow:auto;display:grid;place-items:center;padding:16px}
+.card{width:min(100%,520px);display:grid;gap:14px}
+.card h1{font-family:var(--display);font-weight:800;font-size:clamp(54px,15vw,96px);line-height:.86;margin:0;letter-spacing:.005em;text-transform:uppercase;text-wrap:balance}
+.card h1 em{font-style:normal;color:var(--cherry)}
+.card h2{font-family:var(--display);font-weight:800;font-size:clamp(32px,8vw,46px);line-height:.95;margin:0;text-transform:uppercase;letter-spacing:.01em;text-wrap:balance}
+.eyebrow{font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--turf);margin:0}
+.card p{margin:0;max-width:60ch}
+.muted{color:var(--muted)}
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.team{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;text-align:left;min-width:0}
+.team[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.team span{min-width:0;overflow-wrap:anywhere;font-weight:500}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:8px;padding:10px 18px;font-weight:600}
+.btn.alt{background:transparent;color:var(--ink)}
+.btn.gold{background:var(--blitz);border-color:var(--blitz);color:var(--on-blitz)}
+.rows{display:grid;gap:4px;font-variant-numeric:tabular-nums}
+.row{display:flex;justify-content:space-between;gap:12px;padding:7px 10px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.row.me{border-color:var(--ink)}
+.row b{font-weight:600}
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600}
+details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;color:var(--muted)}
+.warn{color:var(--cherry);font-weight:600}
+@media (prefers-reduced-motion: reduce){ .callout.show{animation:none} }
+</style>
+
+<div class="app" id="app">
+  <header class="board" aria-live="polite">
+    <div class="board-top">
+      <div class="side"><i class="swatch" id="sw"></i><span id="tname">Sixes Blitz</span><b id="score">0/0</b></div>
+      <div class="overs">OV <b id="ov">0.0</b> / 5</div>
+      <span class="badge" id="blitzBadge" hidden>Blitz ×2</span>
+      <div class="ctx" id="ctx">Six a side</div>
+    </div>
+    <div class="board-sub">
+      <div class="bats" id="bats">Pick a side and walk out to the middle.</div>
+      <div class="chips" id="chips" aria-label="This over"></div>
+      <button class="mute" id="mute" type="button" aria-pressed="false">Sound on</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="cv" aria-label="Cricket ground"></canvas>
+    <div class="callout" id="callout" aria-live="assertive"></div>
+  </main>
+
+  <footer class="pad" id="pad" data-off="1">
+    <div class="padgrid" id="padBat">
+      <button class="pb loft" type="button" data-shot="L-1"><i>&#8598; Loft</i><small>leg side <span class="keys">· Q</span></small></button>
+      <button class="pb loft" type="button" data-shot="L0"><i>&#8593; Loft</i><small>straight <span class="keys">· W</span></small></button>
+      <button class="pb loft" type="button" data-shot="L1"><i>&#8599; Loft</i><small>off side <span class="keys">· E</span></small></button>
+      <button class="pb" type="button" data-shot="G-1"><i>&#8592; Ground</i><small>leg side <span class="keys">· A</span></small></button>
+      <button class="pb" type="button" data-shot="G0"><i>&#8593; Ground</i><small>straight <span class="keys">· S</span></small></button>
+      <button class="pb" type="button" data-shot="G1"><i>&#8594; Ground</i><small>off side <span class="keys">· D</span></small></button>
+    </div>
+    <div class="padgrid" id="padBowl" hidden>
+      <button class="pb" type="button" data-bowl="yorker"><i>Yorker</i><small>at the stumps <span class="keys">· A</span></small></button>
+      <button class="pb" type="button" data-bowl="good"><i>Length</i><small>outside off <span class="keys">· S</span></small></button>
+      <button class="pb" type="button" data-bowl="short"><i>Bouncer</i><small>at the body <span class="keys">· D</span></small></button>
+    </div>
+    <p class="padhint" id="padhint">&nbsp;</p>
+  </footer>
+
+  <div class="overlay" id="overlay"></div>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const rnd = (a,b) => a + Math.random()*(b-a);
+const pick = a => a[Math.random()*a.length|0];
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+function weighted(pairs){ let t=0; for(const p of pairs) t+=p[1]; let r=Math.random()*t; for(const p of pairs){ if((r-=p[1])<0) return p[0]; } return pairs[pairs.length-1][0]; }
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/* ---------- teams (all invented) ---------- */
+const TEAMS = [
+  {name:'Harbour Hawks',  short:'Hawks',   c1:'#d4353f', c2:'#1d2a4d', players:['Lam','Vance','Okoro','Brandt','Mistry','Sole']},
+  {name:'Monsoon Kings',  short:'Kings',   c1:'#1c6fd1', c2:'#f0b323', players:['Rahimi','Dutta','Perera','Achebe','Stone','Iyer']},
+  {name:'Desert Falcons', short:'Falcons', c1:'#e08a1e', c2:'#3a2a1a', players:['Haddad','Qasim','Farrow','Nasser','Bello','Zane']},
+  {name:'Reef Sharks',    short:'Sharks',  c1:'#16a3a3', c2:'#0f2f3a', players:['Tane','Marlow','Kealoha','Fisk','Ngata','Reyes']},
+  {name:'Highland Stags', short:'Stags',   c1:'#5b3fa8', c2:'#e9e3f7', players:['Muir','Lachlan','Fenwick','Okafor','Brae','Storr']},
+  {name:'Island Thunder', short:'Thunder', c1:'#7a1f3d', c2:'#f4c542', players:['Baptiste','Corbin','Sealy','Joseph','Mapp','Devon']},
+  {name:'Outback Dingoes',short:'Dingoes', c1:'#e6c72b', c2:'#1f5a36', players:['Hartley','Wren','Cobb','Jarrah','Finch','Dunne']},
+  {name:'Alpine Keas',    short:'Keas',    c1:'#2b2f33', c2:'#c9d1d6', players:['Tui','Rangi','Hollis','Parata','Keene','Ward']}
+];
+const ROUNDS = ['Quarter-final','Semi-final','Final'];
+const OVERS = 5, BALLS = OVERS*6;
+
+/* ---------- state ---------- */
+const G = { phase:'idle', pt:0, time:0, pan:0, tilt:0, match:null, cup:null, ball:null, hit:null, res:null,
+  swingT:-1, swingDir:0, stumpsHit:0, aimX:0, aimPhase:0, catcher:-1, muted:false, userTeam:0, particles:[], resShown:false, resAt:0, hold:0.9 };
+const store = { get(k,d){ try{ const v=localStorage.getItem('sixesblitz.'+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+                set(k,v){ try{ localStorage.setItem('sixesblitz.'+k, JSON.stringify(v)); }catch(e){} } };
+
+/* ---------- sound ---------- */
+let AC=null, noiseBuf=null;
+function audio(){ if(G.muted) return null; try{ if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); noiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; } if(AC.state==='suspended') AC.resume(); return AC; }catch(e){ return null; } }
+function noise(dur, freq, q, vol, attack){ const a=audio(); if(!a) return; const s=a.createBufferSource(); s.buffer=noiseBuf; s.loop=true; const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=q; const g=a.createGain(); const t=a.currentTime; g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+(attack||0.01)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); s.connect(f).connect(g).connect(a.destination); s.start(t); s.stop(t+dur+0.05); }
+function tone(freq, dur, vol, type, slide){ const a=audio(); if(!a) return; const o=a.createOscillator(), g=a.createGain(); const t=a.currentTime; o.type=type||'sine'; o.frequency.setValueAtTime(freq,t); if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+dur); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+0.02); }
+const sfx = {
+  hit(p){ tone(180+p*60,0.07,0.35,'triangle',90); noise(0.06,2400,1,0.25); },
+  cheer(l){ noise(0.9+l*0.7, 1100, 0.6, 0.10+l*0.07, 0.15); },
+  out(){ tone(220,0.5,0.25,'sawtooth',70); noise(0.5,500,0.8,0.12,0.05); },
+  stumps(){ noise(0.12,3200,2,0.4); tone(320,0.1,0.2,'square',140); },
+  click(){ tone(520,0.05,0.12,'square'); }
+};
+
+/* ---------- match model ---------- */
+function newInnings(team, userBats){
+  return { team, userBats, runs:0, wkts:0, balls:0, over:[], bat:team.players.map(n=>({n,r:0,b:0,out:false,retd:false})),
+    s:0, ns:1, bench:[2,3,4,5], blitzOver: userBats ? -1 : 1+(Math.random()*4|0), blitzUsed:false, blitzEnded:false,
+    fours:0, sixes:0, done:false, lastTypes:[] };
+}
+const cur = () => G.match.inn[G.match.i];
+const target = () => G.match.i===1 ? G.match.inn[0].runs+1 : null;
+const blitzActive = inn => inn.blitzOver === Math.floor(inn.balls/6) && !inn.blitzEnded && inn.balls<BALLS;
+
+function applyOutcome(o){
+  const inn=cur(), blitz=blitzActive(inn), mult=blitz?2:1;
+  if(o.wide){ inn.runs+=2; inn.over.push({t:'wd',k:'run'}); }
+  else {
+    const st=inn.bat[inn.s]; st.b++; inn.balls++;
+    if(o.wicket){
+      st.out=true; inn.wkts++; inn.over.push({t:'W',k:'w'}); if(blitz) inn.blitzEnded=true;
+      if(inn.bench.length) inn.s=inn.bench.shift();
+      else if(inn.ns!=null){ inn.s=inn.ns; inn.ns=null; }
+      else inn.done=true;
+    } else {
+      const r=o.runs*mult; st.r+=r; inn.runs+=r;
+      if(o.runs===4) inn.fours++; if(o.runs===6) inn.sixes++;
+      inn.over.push({t: r===0?'•':String(r), k: o.runs===6?'six':o.runs===4?'four':r===0?'dot':'run'});
+      const idx=inn.s;
+      if(o.runs%2===1 && inn.ns!=null){ const t=inn.s; inn.s=inn.ns; inn.ns=t; }
+      if(st.r>=50 && !st.retd && inn.bench.length && inn.ns!=null){            // retire not out at fifty
+        st.retd=true; const nb=inn.bench.shift(); inn.bench.push(idx);
+        if(inn.s===idx) inn.s=nb; else inn.ns=nb; o.retired=st.n;
+      }
+    }
+    if(inn.balls>=BALLS) inn.done=true;
+  }
+  const tg=target(); if(tg!=null && inn.runs>=tg) inn.done=true;
+  if(inn.userBats && inn.done){ const best=store.get('best',0); if(inn.runs>best) store.set('best',inn.runs); }
+}
+
+/* ---------- deliveries ---------- */
+const LEN = { yorker:{zb:1.6,y:0.15}, good:{zb:6.5,y:0.75}, short:{zb:10.5,y:1.45} };
+function mkBall(xArr, len, T, line){ return { xArr, len, T, line, t:0, xRel:0.6, xB:xArr-rnd(-0.25,0.25), zb:LEN[len].zb, yArr:LEN[len].y, swung:false, resolved:false }; }
+function genDelivery(){
+  const d=G.match.diff;
+  const line=weighted([[1,35],[0,33],[-1,22],[2,5],[-2,5]]);
+  const len=weighted([['yorker',20],['good',55],['short',25]]);
+  let T=[0.98,0.88,0.80][d]+rnd(-0.07,0.07); if(Math.random()<0.13) T*=1.3;
+  const x={'-2':-1.5,'-1':-0.38,'0':0,'1':0.4,'2':1.5}[line]+rnd(-0.06,0.06);
+  return mkBall(x,len,T,line);
+}
+function ballPos(b){
+  const u=b.t/b.T, z=19-18.7*u, ub=(19-b.zb)/18.7; let x,y;
+  if(u<ub){ const v=u/ub; y=2.1*(1-v*v); x=b.xRel+(b.xB-b.xRel)*v; }
+  else { const v=(u-ub)/(1-ub); y=b.yArr*v*(2-v); x=b.xB+(b.xArr-b.xB)*v; }
+  return {x, y:Math.max(0.06,y), z};
+}
+
+/* ---------- shots ---------- */
+const FIELD = [[-24,36],[24,36],[-7,55],[9,54]];
+function ropeDist(a){ const c=Math.cos(a); return 10*c+Math.sqrt(100*c*c-100+52*52); }
+function startHit(o, from){
+  let a, dist, apex=0, dur, ground=!o.loft, yEnd=0;
+  const dir=o.dir;
+  if(o.wicket==='caught'){
+    const fi = dir<0?0:dir>0?1:(Math.random()<0.5?2:3); const f=FIELD[fi]; G.catcherNext=fi;
+    a=Math.atan2(f[0],f[1]); dist=Math.hypot(f[0],f[1])-0.5; apex=o.loft?10:4; dur=1.6; ground=false; yEnd=1.6;
+  } else {
+    const deg = dir===0 ? rnd(-3,5) : dir*(Math.random()<0.5?rnd(20,26):rnd(40,45));
+    a=deg*Math.PI/180; const rope=ropeDist(a);
+    if(o.runs===6){ dist=rope+13; apex=15; dur=2.0; ground=false; yEnd=5; }
+    else if(o.runs===4){ dist=rope+1.5; apex=o.loft?7:0; dur=1.5; }
+    else if(o.runs===2){ dist=rope*0.55; apex=o.loft?6:0; dur=1.2; }
+    else if(o.runs===1){ dist=rope*0.3; apex=o.loft?4:0; dur=1.0; }
+    else { dist=6; apex=0; dur=0.7; ground=true; }
+  }
+  G.hit={ a, dist, apex, dur, ground:ground&&apex===0, yEnd, x0:from.x, y0:from.y, z0:from.z, t:0 };
+  return G.hit;
+}
+function hitPos(h){
+  const p=Math.min(1,h.t/h.dur), pe=h.ground?1-(1-p)*(1-p):p, s=h.dist*pe;
+  const x=h.x0+Math.sin(h.a)*s, z=h.z0+Math.cos(h.a)*s;
+  const y=h.ground ? h.y0*(1-p)*(1-p)+Math.abs(Math.sin(p*9))*0.3*(1-p)+0.06 : h.y0*(1-p)+h.apex*4*p*(1-p)+h.yEnd*p;
+  return {x,y,z};
+}
+
+function batOutcome(q, loft, dir, b){
+  const line=clamp(b.line,-1,1);
+  if(Math.abs(dir-line)===2) q++;
+  if(loft && b.len==='yorker') q++;
+  if(b.len==='short' && dir===0) q++;
+  q=Math.min(q,3);
+  let v;
+  if(loft) v=[ [[6,100]], [[6,55],[4,35],[2,10]], [[2,35],[1,20],[4,15],['c',30]], [['c',45],[0,30],[1,25]] ][q];
+  else     v=[ [[4,100]], [[4,35],[2,40],[1,25]], [[1,50],[2,15],[0,35]], [[0,62],[1,23],['c',15]] ][q];
+  const r=weighted(v);
+  return r==='c' ? {runs:0,wicket:'caught',loft,dir} : {runs:r,wicket:false,loft,dir};
+}
+function describe(o, small){
+  const inn=cur(), mult=blitzActive(inn)?2:1;
+  if(o.wide) return {big:'Wide', small:'Two runs and the ball again', cls:''};
+  if(o.wicket==='bowled') return {big:'Bowled!', small: small||'Middle stump', cls:'out'};
+  if(o.wicket==='caught') return {big:'Caught!', small: small||'Straight to the fielder', cls:'out'};
+  const b = mult>1 && o.runs ? ' · Blitz counts '+(o.runs*mult) : '';
+  if(o.runs===6) return {big:'Six!', small:(small||'Into the stands')+b, cls:'six'};
+  if(o.runs===4) return {big:'Four!', small:(small||'Races to the rope')+b, cls:''};
+  if(o.runs===0) return {big:'Dot', small:small||'No run', cls:''};
+  return {big:o.runs+(o.runs===1?' run':' runs'), small:(small||'')+b, cls:''};
+}
+
+/* ---------- bowling (you) ---------- */
+const IDEAL = { yorker:0, good:0.38, short:-0.32 };
+function bowlQuality(type, x){
+  const e=Math.abs(x-IDEAL[type]);
+  if(Math.abs(x)>1.2) return -1;
+  if(type==='yorker') return e<0.2?0:e<0.48?1:e<0.75?2:3;
+  return e<0.2?0:e<0.45?1:e<0.8?2:3;
+}
+function aiOutcome(q){
+  const t=[ [['W',22],[0,40],[1,25],[2,8],[4,5]],
+            [['W',10],[0,30],[1,30],[2,12],[4,12],[6,6]],
+            [['W',5],[0,18],[1,27],[2,15],[4,20],[6,15]],
+            [['W',2],[0,8],[1,20],[2,15],[4,28],[6,27]] ][q];
+  return weighted(t);
+}
+
+/* ---------- flow ---------- */
+function setPhase(p){ G.phase=p; G.pt=0; }
+function startMatch(user, opp, round, diff){
+  G.match={ user, opp, round, diff, inn:[], i:0 };
+  G.pan=0; G.tilt=0; resetBallState();
+  const won=Math.random()<0.5;
+  if(won) card(`<p class="eyebrow">${round}</p><h2>You won the toss</h2><p>${user.name} v ${opp.name}. Five overs each. Bat first and set a total, or bowl first and chase it down.</p>
+    <div class="btns"><button class="btn" data-act="bat">Bat first</button><button class="btn alt" data-act="bowl">Bowl first</button></div>`);
+  else { const aiBats=Math.random()<0.5; G.match.aiBats=aiBats;
+    card(`<p class="eyebrow">${round}</p><h2>${opp.short} won the toss</h2><p>${opp.name} will ${aiBats?'bat':'bowl'} first, so you ${aiBats?'bowl':'bat'}.</p>
+    <div class="btns"><button class="btn" data-act="${aiBats?'bowl':'bat'}">Walk out</button></div>`); }
+  updateHUD();
+}
+function setInnings(userBatsFirst){
+  const m=G.match;
+  m.inn=[ newInnings(userBatsFirst?m.user:m.opp, userBatsFirst), newInnings(userBatsFirst?m.opp:m.user, !userBatsFirst) ];
+  m.i=0; beginInnings();
+}
+function beginInnings(){
+  const inn=cur(); $('#padBat').hidden=!inn.userBats; $('#padBowl').hidden=inn.userBats;
+  $('#padhint').textContent = inn.userBats ? 'Press a direction as the ball reaches the bat. Loft for sixes, ground for safety.' : 'Press a length as the marker crosses its patch. Mix them up.';
+  resetBallState(); updateHUD(); overCard();
+}
+function overCard(){
+  const inn=cur(), n=Math.floor(inn.balls/6), tg=target(); inn.over=[]; updateHUD();
+  let status = inn.balls===0 ? (inn.userBats ? 'You are batting.' : 'You are bowling.') : `${inn.team.short} are ${inn.runs}/${inn.wkts}.`;
+  if(tg!=null) status += ` ${inn.userBats?'You need':inn.team.short+' need'} ${tg-inn.runs} off ${BALLS-inn.balls} balls.`;
+  let extra='', btns=`<button class="btn" data-act="over">${inn.userBats?'Face':'Bowl'} over ${n+1}</button>`;
+  if(inn.userBats && !inn.blitzUsed){
+    extra=`<p class="muted">Your Blitz Over is unused. Every run off the bat counts double for one over, but a wicket ends it${n===OVERS-1?'. This is your last chance to call it.':'.'}</p>`;
+    btns+=`<button class="btn gold" data-act="blitz">Call Blitz Over</button>`;
+  }
+  if(!inn.userBats && inn.blitzOver===n) extra=`<p class="warn">${inn.team.short} have called their Blitz Over. Runs off the bat count double until you take a wicket.</p>`;
+  card(`<p class="eyebrow">${G.match.round} · ${G.match.i===0?'First':'Second'} innings</p><h2>Over ${n+1} of ${OVERS}</h2><p>${status}</p>${extra}<div class="btns">${btns}</div>`);
+}
+function resetBallState(){ G.ball=null; G.hit=null; G.res=null; G.swingT=-1; G.stumpsHit=0; G.catcher=-1; G.resShown=false; $('#callout').className='callout'; setPhase('idle'); }
+function nextBall(){
+  const inn=cur(); resetBallState(); $('#pad').dataset.off='0';
+  if(inn.userBats){ G.ball=genDelivery(); setPhase('runup'); }
+  else { G.aimPhase=rnd(0,6.28); setPhase('aim'); }
+}
+function afterBall(){
+  const inn=cur(), legal=G.res && !G.res.out.wide;
+  if(inn.done) return endInnings();
+  if(legal && inn.balls%6===0){ if(inn.ns!=null){ const t=inn.s; inn.s=inn.ns; inn.ns=t; } $('#pad').dataset.off='1'; resetBallState(); return overCard(); }
+  nextBall();
+}
+function endInnings(){
+  const m=G.match, inn=cur(); $('#pad').dataset.off='1'; resetBallState(); updateHUD();
+  if(m.i===0){
+    card(`<p class="eyebrow">Innings break</p><h2>${inn.team.short} ${inn.runs}/${inn.wkts}</h2><p>${m.inn[1].team.name} need <b>${inn.runs+1}</b> to win from ${OVERS} overs.</p>${topScorer(inn)}
+      <div class="btns"><button class="btn" data-act="chase">${m.inn[1].userBats?'Start the chase':'Defend it'}</button></div>`);
+  } else finishMatch();
+}
+function topScorer(inn){ const b=inn.bat.slice().sort((a,c)=>c.r-a.r)[0]; return `<p class="muted">Top score: ${b.n} ${b.r}${b.out?'':'*'} (${b.b}). Boundaries: ${inn.fours} fours, ${inn.sixes} sixes.</p>`; }
+function finishMatch(){
+  const m=G.match, a=m.inn[0], b=m.inn[1]; let winner, how;
+  if(b.runs>a.runs){ winner=b.team; how=`with ${BALLS-b.balls} ball${BALLS-b.balls===1?'':'s'} to spare`; }
+  else if(a.runs>b.runs){ winner=a.team; how=`by ${a.runs-b.runs} run${a.runs-b.runs===1?'':'s'}`; }
+  else { const ba=a.fours+a.sixes, bb=b.fours+b.sixes; winner = ba!==bb ? (ba>bb?a.team:b.team) : a.wkts!==b.wkts ? (a.wkts<b.wkts?a.team:b.team) : (Math.random()<0.5?a.team:b.team); how='on countback after a tie'; }
+  const userWon = winner===m.user; m.userWon=userWon;
+  if(userWon){ sfx.cheer(1); }
+  const lines=`<div class="rows"><div class="row${a.team===m.user?' me':''}"><span>${a.team.name}</span><b>${a.runs}/${a.wkts} (${ovs(a.balls)})</b></div><div class="row${b.team===m.user?' me':''}"><span>${b.team.name}</span><b>${b.runs}/${b.wkts} (${ovs(b.balls)})</b></div></div>`;
+  let next;
+  if(G.cup){
+    if(!userWon) next=`<p>Your cup run ends in the ${m.round.toLowerCase()}.</p><div class="btns"><button class="btn" data-act="menu">Back to the pavilion</button></div>`;
+    else if(G.cup.round===2){ store.set('cups', store.get('cups',0)+1); confetti(); next=`<p>${m.user.name} lift the Blitz Cup.</p><div class="btns"><button class="btn" data-act="menu">Back to the pavilion</button></div>`; }
+    else next=`<div class="btns"><button class="btn" data-act="advance">On to the ${ROUNDS[G.cup.round+1].toLowerCase()}</button></div>`;
+  } else next=`<div class="btns"><button class="btn" data-act="rematch">Play again</button><button class="btn alt" data-act="menu">Back to the pavilion</button></div>`;
+  card(`<p class="eyebrow">${m.round} · Result</p><h2>${userWon && G.cup && G.cup.round===2 ? 'Champions!' : winner.short+' win '+how}</h2>${lines}${next}`);
+}
+const ovs = balls => Math.floor(balls/6)+'.'+(balls%6);
+
+/* ---------- cup ---------- */
+function startCup(){
+  const user=TEAMS[G.userTeam], others=shuffle(TEAMS.filter(t=>t!==user));
+  G.cup={ round:0, teams:[user,...others], last:null }; fixtures();
+}
+function fixtures(){
+  const c=G.cup; let rows='';
+  for(let i=0;i<c.teams.length;i+=2){ const me=c.teams[i]===TEAMS[G.userTeam]||c.teams[i+1]===TEAMS[G.userTeam]; rows+=`<div class="row${me?' me':''}"><span>${c.teams[i].name}</span><span>v</span><span>${c.teams[i+1].name}</span></div>`; }
+  const last = c.last ? `<p class="muted">Elsewhere: ${c.last.join('. ')}.</p>` : '';
+  card(`<p class="eyebrow">Blitz Cup</p><h2>${ROUNDS[c.round]}${c.teams.length>2?'s':''}</h2><div class="rows">${rows}</div>${last}<div class="btns"><button class="btn" data-act="cupmatch">Go to the toss</button></div>`);
+}
+function advanceCup(){
+  const c=G.cup, winners=[], last=[];
+  for(let i=0;i<c.teams.length;i+=2){
+    const a=c.teams[i], b=c.teams[i+1];
+    if(a===TEAMS[G.userTeam]||b===TEAMS[G.userTeam]){ winners.push(TEAMS[G.userTeam]); continue; }
+    const sa=55+(Math.random()*50|0); let sb=55+(Math.random()*50|0); if(sb===sa) sb++;
+    winners.push(sa>sb?a:b); last.push(`${(sa>sb?a:b).short} beat ${(sa>sb?b:a).short} ${Math.max(sa,sb)} to ${Math.min(sa,sb)}`);
+  }
+  c.teams=winners; c.round++; c.last=last; fixtures();
+}
+
+/* ---------- menu ---------- */
+function menu(){
+  G.match=null; G.cup=null; resetBallState(); $('#pad').dataset.off='1'; updateHUD();
+  const teams=TEAMS.map((t,i)=>`<button class="team" type="button" data-team="${i}" aria-pressed="${i===G.userTeam}"><i class="swatch" style="background:linear-gradient(135deg,${t.c1} 50%,${t.c2} 50%)"></i><span>${t.name}</span></button>`).join('');
+  const cups=store.get('cups',0), best=store.get('best',0);
+  card(`<p class="eyebrow">Six a side · Five overs · Knockout</p><h1>Sixes <em>Blitz</em></h1>
+    <p>Thirty balls to bat, thirty to bowl. Time your shots, clear the rope, and call your Blitz Over when it will hurt most.</p>
+    <div class="teams" role="group" aria-label="Choose your side">${teams}</div>
+    <div class="btns"><button class="btn" data-act="cup">Play the Blitz Cup</button><button class="btn alt" data-act="quick">Quick match</button></div>
+    <p class="muted">Cups won: ${cups} · Best innings: ${best}</p>
+    <details><summary>How to play</summary><ul>
+      <li><b>Batting.</b> Press a shot as the ball reaches the bat. Timing decides everything: perfect lofted shots are six, perfect ground shots are four, mistimed lofts get caught.</li>
+      <li>Hit with the line. A ball outside off goes to the off side; dragging it across to leg is a risk. Don't loft yorkers. Leave wides alone for two free runs.</li>
+      <li>A ball on middle stump that you miss will bowl you.</li>
+      <li><b>Bowling.</b> A marker sweeps across the pitch. Press Yorker, Length or Bouncer as it crosses that delivery's patch. Miss the patch and you get hit; miss the pitch and it's a wide. Repeating a delivery makes it easier to read.</li>
+      <li><b>Sixes rules.</b> Six players, five overs. Wides cost two runs. A batter retires not out at 50. The last batter standing bats on alone.</li>
+      <li><b>Blitz Over.</b> Once per innings, runs off the bat count double for one over. A wicket ends it early.</li>
+    </ul></details>`);
+}
+
+/* ---------- overlay + HUD ---------- */
+function card(html){ const o=$('#overlay'); o.innerHTML=`<div class="card">${html}</div>`; o.hidden=false; o.scrollTop=0; const b=o.querySelector('.btn'); if(b) try{ b.focus({preventScroll:true}); }catch(e){} }
+function hideCard(){ $('#overlay').hidden=true; }
+$('#overlay').addEventListener('click', e=>{
+  const t=e.target.closest('[data-team]'); if(t){ G.userTeam=+t.dataset.team; document.querySelectorAll('.team').forEach(b=>b.setAttribute('aria-pressed', b===t)); sfx.click(); return; }
+  const b=e.target.closest('[data-act]'); if(!b) return; const act=b.dataset.act; sfx.click();
+  if(act==='cup'){ startCup(); }
+  else if(act==='quick'){ const u=TEAMS[G.userTeam]; startMatch(u, pick(TEAMS.filter(t=>t!==u)), 'Friendly', 0); }
+  else if(act==='rematch'){ const m=G.match; startMatch(m.user, m.opp, 'Friendly', 0); }
+  else if(act==='cupmatch'){ const c=G.cup, u=TEAMS[G.userTeam], i=c.teams.indexOf(u), opp=c.teams[i^1]; startMatch(u, opp, ROUNDS[c.round], c.round); }
+  else if(act==='bat'){ setInnings(true); }
+  else if(act==='bowl'){ setInnings(false); }
+  else if(act==='over'){ hideCard(); nextBall(); }
+  else if(act==='blitz'){ const inn=cur(); inn.blitzOver=Math.floor(inn.balls/6); inn.blitzUsed=true; hideCard(); updateHUD(); nextBall(); }
+  else if(act==='chase'){ G.match.i=1; beginInnings(); }
+  else if(act==='advance'){ advanceCup(); }
+  else if(act==='menu'){ menu(); }
+});
+$('#mute').addEventListener('click', ()=>{ G.muted=!G.muted; $('#mute').textContent=G.muted?'Sound off':'Sound on'; $('#mute').setAttribute('aria-pressed', G.muted); });
+
+function updateHUD(){
+  const m=G.match;
+  if(!m || !m.inn.length){ $('#tname').textContent=m?m.user.short+' v '+m.opp.short:'Sixes Blitz'; $('#score').textContent=''; $('#ov').textContent='0.0'; $('#ctx').textContent=m?m.round:'Six a side'; $('#bats').textContent=m?'Waiting on the toss.':'Pick a side and walk out to the middle.'; $('#chips').innerHTML=''; $('#blitzBadge').hidden=true; $('#sw').style.background='transparent'; return; }
+  const inn=cur(), tg=target();
+  $('#sw').style.background=`linear-gradient(135deg,${inn.team.c1} 50%,${inn.team.c2} 50%)`;
+  $('#tname').textContent=inn.team.short; $('#score').textContent=inn.runs+'/'+inn.wkts; $('#ov').textContent=ovs(inn.balls);
+  $('#ctx').textContent = tg!=null ? (inn.runs>=tg ? 'Target reached' : `Need ${tg-inn.runs} off ${BALLS-inn.balls}`) : (inn.userBats?'You bat · 1st innings':'You bowl · 1st innings');
+  const s=inn.bat[inn.s], n=inn.ns!=null?inn.bat[inn.ns]:null;
+  $('#bats').innerHTML = inn.done && inn.wkts>=6 ? 'All out.' : `<b>${s.n}* ${s.r}</b> (${s.b})` + (n?` · ${n.n} ${n.r} (${n.b})`:' · last batter standing');
+  $('#chips').innerHTML = inn.over.map(c=>`<span class="chip ${c.k}">${c.t}</span>`).join('');
+  $('#blitzBadge').hidden = !blitzActive(inn);
+}
+function callout(big, small, cls){ const el=$('#callout'); el.className='callout '+(cls||''); el.innerHTML=`<b>${big}</b><span>${small||''}</span>`; void el.offsetWidth; el.classList.add('show'); }
+
+/* ---------- input ---------- */
+function playShot(loft, dir){
+  const inn=G.match&&G.match.inn.length?cur():null; if(!inn || !inn.userBats || G.phase!=='flight') return;
+  const b=G.ball; if(b.swung || b.t<0.12) return;
+  b.swung=true; G.swingT=0; G.swingDir=dir;
+  const d=b.t-(b.T-0.02), k=[1,0.88,0.78][G.match.diff], w=[0.05*k,0.10*k,0.155*k,0.225*k], ad=Math.abs(d);
+  const q = ad<w[0]?0 : ad<w[1]?1 : ad<w[2]?2 : ad<w[3]?3 : 4;
+  b.timing = q===0?'Perfect timing' : q===1?'Good timing' : q<4?(d<0?'A touch early':'A touch late') : (d<0?'Far too early':'Too late');
+  if(q===4) return;                                   // swing and a miss; the ball carries on
+  const o=batOutcome(q, loft, dir, b); b.resolved=true;
+  const h=startHit(o, ballPos(b)); sfx.hit(o.runs/3);
+  G.res={ out:o, ...describe(o, o.wicket?b.timing+', and it is caught':b.timing) };
+  G.resAt = o.wicket ? h.dur : o.runs>=4 ? h.dur*0.72 : h.dur*0.6; G.hold=0.9; G.resShown=false; setPhase('result');
+}
+function bowlBall(type){
+  const inn=G.match&&G.match.inn.length?cur():null; if(!inn || inn.userBats || G.phase!=='aim') return;
+  const x=G.aimX; let q=bowlQuality(type,x), note='';
+  let o;
+  if(q<0) o={wide:true};
+  else {
+    const lt=inn.lastTypes, rep=(lt[0]===type?1:0)+(lt[0]===type&&lt[1]===type?1:0);
+    if(rep){ q=Math.min(3,q+rep); note=' · too predictable'; }
+    if(Math.random()<[0,0.15,0.3][G.match.diff]) q=Math.min(3,q+1);
+    lt.unshift(type); lt.length=Math.min(lt.length,2);
+    const r=aiOutcome(q), label=['Great ball','Good ball','Loose ball','In the slot'][q]+note;
+    if(r==='W'){ const bowled = type!=='short' && Math.abs(x)<0.3; o={runs:0, wicket:bowled?'bowled':'caught', loft:true, dir:pick([-1,0,1]), label}; }
+    else o={runs:r, wicket:false, loft:r===6||(r>=2&&Math.random()<0.4), dir:pick([-1,0,1]), label, miss:r===0&&Math.random()<0.5};
+  }
+  G.ball=mkBall(x, type, [0.9,0.86,0.82][G.match.diff], x>0.2?1:x<-0.2?-1:0); G.ball.xB=x; G.pending=o; setPhase('runup');
+}
+document.querySelectorAll('[data-shot]').forEach(b=>{ const s=b.dataset.shot, f=()=>playShot(s[0]==='L', +s.slice(1));
+  b.addEventListener('pointerdown', e=>{ e.preventDefault(); f(); }); b.addEventListener('click', e=>{ if(e.detail===0) f(); }); });
+document.querySelectorAll('[data-bowl]').forEach(b=>{ const f=()=>bowlBall(b.dataset.bowl);
+  b.addEventListener('pointerdown', e=>{ e.preventDefault(); f(); }); b.addEventListener('click', e=>{ if(e.detail===0) f(); }); });
+addEventListener('keydown', e=>{
+  if(e.repeat || e.metaKey || e.ctrlKey || e.altKey || !G.match || !G.match.inn.length || !$('#overlay').hidden) return;
+  const k=e.key.toLowerCase(), bat=cur().userBats;
+  const shots={q:[1,-1],w:[1,0],e:[1,1],a:[0,-1],s:[0,0],d:[0,1],arrowleft:[e.shiftKey?1:0,-1],arrowup:[e.shiftKey?1:0,0],arrowright:[e.shiftKey?1:0,1]};
+  const bowls={a:'yorker',s:'good',d:'short','1':'yorker','2':'good','3':'short'};
+  if(bat && shots[k]){ e.preventDefault(); playShot(!!shots[k][0], shots[k][1]); }
+  else if(!bat && bowls[k]){ e.preventDefault(); bowlBall(bowls[k]); }
+});
+
+/* ---------- update ---------- */
+const RUNUP=0.8;
+function passResult(){                                     // the ball has gone past the bat
+  const b=G.ball, inn=cur(); let o, small;
+  if(inn.userBats){
+    if(Math.abs(b.line)===2){ o={wide:true}; }
+    else if(Math.abs(b.xArr)<0.17 && b.len!=='short'){ o={runs:0,wicket:'bowled'}; small=b.swung?b.timing:'You left a straight one'; }
+    else { o={runs:0,wicket:false}; small=b.swung?b.timing+', beaten':'Left alone'; }
+    G.res={ out:o, ...describe(o, small) };
+  } else { o=G.pending; G.res={ out:o, ...describe(o, o.wide?null:o.label) }; }
+  if(o.wicket==='bowled'){ G.stumpsHit=0.001; sfx.stumps(); }
+  G.resAt=0.15; G.hold=1.0; G.resShown=false; setPhase('result');
+}
+function commitResult(){
+  const o=G.res.out; if(G.catcherNext!=null && o.wicket==='caught') G.catcher=G.catcherNext; G.catcherNext=null;
+  applyOutcome(o);
+  let small=G.res.small; if(o.retired) small=`${o.retired} retires not out on fifty`;
+  callout(G.res.big, small, G.res.cls); updateHUD();
+  if(o.wicket) sfx.out(); else if(o.runs>=4) sfx.cheer(o.runs===6?1:0.4);
+}
+function update(dt){
+  G.pt+=dt; G.time+=dt;
+  if(G.swingT>=0) G.swingT+=dt;
+  if(G.stumpsHit>0) G.stumpsHit+=dt;
+  const b=G.ball;
+  if(G.phase==='aim'){ G.aimX=1.5*Math.sin(G.pt*[2.6,3.2,3.8][G.match.diff]+G.aimPhase); }
+  else if(G.phase==='runup'){ if(G.pt>=RUNUP){ setPhase('flight'); } }
+  else if(G.phase==='flight'){
+    b.t+=dt; const u=b.t/b.T, inn=cur();
+    if(!inn.userBats && !b.resolved && u>=0.97){
+      const o=G.pending;
+      if(!o.wide && o.wicket!=='bowled' && !o.miss){                     // the batter connects
+        b.resolved=true; G.swingT=0; G.swingDir=o.dir; const h=startHit(o, ballPos(b)); sfx.hit(o.runs/3);
+        G.res={ out:o, ...describe(o, o.label) }; G.resAt=o.wicket?h.dur:o.runs>=4?h.dur*0.72:h.dur*0.6; G.hold=0.9; G.resShown=false; setPhase('result');
+      } else if(!b.swung && !o.wide){ b.swung=true; G.swingT=0; G.swingDir=o.dir||0; }
+    }
+    if(G.phase==='flight' && u>=1.016 && !b.resolved){ b.resolved=true; passResult(); }
+  }
+  else if(G.phase==='result'){
+    if(G.hit) G.hit.t+=dt;
+    else if(b && !(G.stumpsHit>0) && b.t/b.T<1.14) b.t+=dt;
+    if(!G.resShown && G.pt>=G.resAt){ G.resShown=true; commitResult(); }
+    if(G.resShown && G.pt>=G.resAt+G.hold) afterBall();
+  }
+  // camera follows the ball once it is hit
+  let tp=0, tt=0;
+  if(G.hit){ const p=hitPos(G.hit), d=p.z+CAM_D, s=V.f/Math.max(d,0.6), ox=p.x*s, oy=V.hor+(CAM_H-p.y)*s, mg=V.W*0.3;
+    if(Math.abs(ox)>mg) tp=ox-Math.sign(ox)*mg; if(oy<V.H*0.14) tt=oy-V.H*0.14; }
+  const k=Math.min(1,dt*6); G.pan+=(tp-G.pan)*k; G.tilt+=(tt-G.tilt)*k;
+  for(const p of G.particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=260*dt; p.r+=p.vr*dt; }
+  if(G.particles.length) G.particles=G.particles.filter(p=>p.y<V.H+20);
+}
+function confetti(){ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; const t=G.match.user; for(let i=0;i<160;i++) G.particles.push({x:rnd(0,V.W),y:rnd(-V.H*0.6,0),vx:rnd(-40,40),vy:rnd(20,160),r:rnd(0,6),vr:rnd(-6,6),c:pick([t.c1,t.c2,'#f2c230','#ffffff'])}); }
+
+/* ---------- drawing ---------- */
+const cv=$('#cv'), ctx=cv.getContext('2d');
+const V={W:800,H:500,f:550,hor:180}, CAM_H=2.6, CAM_D=6;
+let dark=false;
+function readTheme(){ const t=document.documentElement.getAttribute('data-theme'); dark = t ? t==='dark' : matchMedia('(prefers-color-scheme: dark)').matches; }
+readTheme(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+new MutationObserver(readTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+function resize(){ const r=$('#stage').getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1); V.W=Math.max(200,r.width); V.H=Math.max(200,r.height); cv.width=V.W*dpr; cv.height=V.H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); V.f=Math.min(V.H*1.1,V.W*1.3); V.hor=V.H*0.36; }
+new ResizeObserver(resize).observe($('#stage')); resize();
+function proj(x,y,z){ const s=V.f/Math.max(z+CAM_D,0.6); return {x:V.W/2+x*s-G.pan, y:V.hor+(CAM_H-y)*s-G.tilt, s}; }
+const CROWD=[]; for(let i=0;i<620;i++) CROWD.push({th:rnd(-1.75,1.75), h:rnd(1.2,11), c:Math.random()*6|0, tw:rnd(0,6.28)});
+const CROWD_DAY=['#e8eef5','#d4353f','#f0b323','#1c6fd1','#f6f6f6','#16a3a3'], CROWD_NIGHT=['#8fa0c0','#a34a55','#b89a45','#4a70b0','#c9d0de','#3f8a8a'];
+
+function drawGround(){
+  const W=V.W,H=V.H;
+  const sky=ctx.createLinearGradient(0,0,0,V.hor-G.tilt+10);
+  if(dark){ sky.addColorStop(0,'#070d22'); sky.addColorStop(1,'#1a2a55'); } else { sky.addColorStop(0,'#6fb5ea'); sky.addColorStop(1,'#d6ecfb'); }
+  ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+  const g1=dark?'#1c6335':'#3d9a49', g2=dark?'#217040':'#47a653';
+  const y0=V.hor-G.tilt; ctx.fillStyle=g1; ctx.fillRect(0,y0,W,H-y0+2);
+  for(let z=-4, i=0; z<72; z+=7, i++){ if(i%2) continue; const a=proj(0,0,z).y, b=proj(0,0,z+7).y; ctx.fillStyle=g2; ctx.fillRect(0,b,W,a-b); }
+  // stands: a curved wall behind the rope
+  const N=48, base=[], top=[];
+  for(let i=0;i<=N;i++){ const th=(-1.75+3.5*i/N), x=54.5*Math.sin(th), z=10+54.5*Math.cos(th); base.push(proj(x,0,z)); top.push(proj(x*1.08,13,10+(z-10)*1.08)); }
+  ctx.beginPath(); base.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); for(let i=N;i>=0;i--) ctx.lineTo(top[i].x,top[i].y); ctx.closePath();
+  ctx.fillStyle=dark?'#0e1730':'#2b3d5a'; ctx.fill();
+  ctx.beginPath(); top.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.strokeStyle=dark?'#27365f':'#f1f4f8'; ctx.lineWidth=Math.max(2,V.f*0.006); ctx.stroke();
+  const cols=dark?CROWD_NIGHT:CROWD_DAY;
+  for(const c of CROWD){ const k=1+0.08*(c.h/13), x=54.5*Math.sin(c.th)*k, z=10+54.5*Math.cos(c.th)*k; if(z<-3) continue; const p=proj(x,c.h,z); if(p.x<-4||p.x>W+4) continue;
+    const s=Math.max(1.5,p.s*0.42); ctx.fillStyle=cols[c.c]; ctx.globalAlpha = 0.75+0.25*Math.sin(G.time*3+c.tw); ctx.fillRect(p.x,p.y,s,s); }
+  ctx.globalAlpha=1;
+  // floodlights
+  for(const sx of [-44,44]){ const b=proj(sx,13,46), t=proj(sx,30,46); ctx.strokeStyle=dark?'#3a4a75':'#7d8ea8'; ctx.lineWidth=Math.max(2,b.s*0.5); ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(t.x,t.y); ctx.stroke();
+    const w=t.s*5; ctx.fillStyle=dark?'#fff8d8':'#dfe6ee'; ctx.fillRect(t.x-w/2,t.y-w*0.3,w,w*0.5);
+    if(dark){ const gl=ctx.createRadialGradient(t.x,t.y,0,t.x,t.y,w*3.2); gl.addColorStop(0,'rgba(255,246,200,.55)'); gl.addColorStop(1,'rgba(255,246,200,0)'); ctx.fillStyle=gl; ctx.fillRect(t.x-w*3.2,t.y-w*3.2,w*6.4,w*6.4); } }
+  // rope
+  ctx.beginPath(); for(let i=0;i<=N;i++){ const th=(-1.75+3.5*i/N), p=proj(52*Math.sin(th),0,10+52*Math.cos(th)); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
+  ctx.strokeStyle='#f7f7f2'; ctx.lineWidth=Math.max(1.5,V.f*0.004); ctx.stroke();
+  // pitch
+  const q=[proj(-1.5,0,-1.6),proj(1.5,0,-1.6),proj(1.5,0,21.6),proj(-1.5,0,21.6)];
+  ctx.beginPath(); q.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.closePath(); ctx.fillStyle=dark?'#b3a06b':'#dcc98e'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.9)';
+  for(const z of [1.22,18.78,0,20]){ const a=proj(-1.5,0,z), b=proj(1.5,0,z); ctx.lineWidth=Math.max(1,a.s*0.05); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+}
+function circle(x,y,r){ ctx.beginPath(); ctx.arc(x,y,Math.max(0.5,r),0,6.2832); ctx.fill(); }
+function drawFig(x,z,t,o){
+  o=o||{}; const p=proj(x,0,z), s=p.s, bob=o.bob||0;
+  const R=(cx,y0,w,h,c)=>{ ctx.fillStyle=c; ctx.fillRect(p.x+(cx-w/2)*s, p.y-(y0+h+bob)*s, w*s, h*s); };
+  ctx.fillStyle='rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(p.x,p.y,0.36*s,0.09*s,0,0,6.2832); ctx.fill();
+  const leg=o.pads?'#f3f1e6':t.c2; R(-0.11,0,0.16,0.86,leg); R(0.11,0,0.16,0.86,leg);
+  R(0,0.82,0.46,0.64,t.c1); R(0,0.82,0.46,0.09,t.c2);
+  if(o.arms==='up'){ R(-0.28,1.3,0.1,0.56,t.c1); R(0.28,1.3,0.1,0.56,t.c1); } else { R(-0.29,0.92,0.1,0.5,t.c1); R(0.29,0.92,0.1,0.5,t.c1); }
+  ctx.fillStyle='#c98f66'; circle(p.x,p.y-(1.6+bob)*s,0.125*s);
+  ctx.fillStyle=t.c2; if(o.helmet) circle(p.x,p.y-(1.63+bob)*s,0.145*s); else { ctx.beginPath(); ctx.arc(p.x,p.y-(1.63+bob)*s,0.14*s,Math.PI,0); ctx.fill(); }
+  return p;
+}
+function drawStumps(z,hit){
+  for(const i of [-1,0,1]){ const p=proj(i*0.11,0,z), h=0.71*p.s, w=Math.max(2,0.04*p.s);
+    ctx.save(); ctx.translate(p.x,p.y); if(hit>0){ const k=Math.min(1,hit*5); ctx.rotate((i*0.55+0.15)*k); ctx.translate(0,-0.12*p.s*k); }
+    ctx.fillStyle=dark?'#f2e9c8':'#f6efd2'; ctx.fillRect(-w/2,-h,w,h); ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1; ctx.strokeRect(-w/2,-h,w,h); ctx.restore(); }
+  if(!(hit>0)){ const a=proj(-0.13,0.72,z), b=proj(0.13,0.72,z); ctx.fillStyle='#b3202c'; ctx.fillRect(a.x,a.y-Math.max(1.5,a.s*0.03),b.x-a.x,Math.max(2,a.s*0.035)); }
+}
+function batAngle(){ if(G.swingT<0) return 0.35; const k=Math.min(1,G.swingT/0.16), e=1-(1-k)*(1-k), tg=G.swingDir<0?2.5:G.swingDir>0?-2.5:-2.95; return 0.35+(tg-0.35)*e; }
+const UMP={c1:'#f1f1ec',c2:'#20242a'};
+function draw(){
+  drawGround();
+  const m=G.match, hasInn=m&&m.inn.length, inn=hasInn?cur():null;
+  const batT = inn?inn.team:TEAMS[G.userTeam], fldT = inn?(inn.team===m.user?m.opp:m.user):TEAMS[(G.userTeam+2)%TEAMS.length];
+  FIELD.forEach((f,i)=> drawFig(f[0],f[1],fldT,{arms:G.catcher===i?'up':''}));
+  drawFig(0,23,UMP); drawStumps(20,0);
+  drawFig(-1.25,19.4,batT,{pads:true,helmet:true});
+  let bz=26.5, bob=0, arms='';
+  if(G.phase==='runup'){ bz=26.5-6*(G.pt/RUNUP); bob=Math.abs(Math.sin(G.pt*22))*0.1; if(G.pt>RUNUP-0.15) arms='up'; }
+  else if(G.phase==='flight'||G.phase==='result'){ bz=20.5-Math.min(1.5,G.pt*4); }
+  else if(G.phase==='aim'){ bob=Math.abs(Math.sin(G.time*5))*0.04; }
+  drawFig(0.9,bz,fldT,{bob,arms});
+  // bowling targets
+  if(G.phase==='aim'){
+    for(const k of ['yorker','good','short']){ const p=proj(IDEAL[k],0,LEN[k].zb); ctx.fillStyle='rgba(31,122,68,.45)'; ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,0.24*p.s,0.5*p.s*0.24,0,0,6.2832); ctx.fill(); ctx.stroke(); }
+    ctx.strokeStyle='rgba(179,32,44,.9)'; ctx.lineWidth=2; ctx.beginPath(); const a=proj(G.aimX,0,0.6), c=proj(G.aimX,0,11.5); ctx.moveTo(a.x,a.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+    for(const k of ['yorker','good','short']){ const p=proj(G.aimX,0,LEN[k].zb), on=Math.abs(G.aimX-IDEAL[k])<0.2; ctx.fillStyle=on?'#ffffff':'#b3202c'; circle(p.x,p.y,(on?0.13:0.08)*p.s); }
+  }
+  // striker
+  const bp=drawFig(-0.55,0.9,batT,{pads:true,helmet:true}), s=bp.s;
+  ctx.save(); ctx.translate(bp.x+0.2*s, bp.y-0.98*s); ctx.rotate(batAngle()); ctx.fillStyle='#2a2a2a'; ctx.fillRect(-0.025*s,0,0.05*s,0.28*s); ctx.fillStyle='#e9d39b'; ctx.fillRect(-0.06*s,0.26*s,0.12*s,0.62*s); ctx.restore();
+  drawStumps(0,G.stumpsHit);
+  // ball
+  let pos=null; if(G.hit) pos=hitPos(G.hit); else if(G.ball && (G.phase==='flight'||G.phase==='result')) pos=ballPos(G.ball);
+  if(pos && pos.z>-4.5){ const sh=proj(pos.x,0,pos.z), p=proj(pos.x,pos.y,pos.z), r=Math.max(2.4,0.075*p.s);
+    ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(sh.x,sh.y,r*1.1,r*0.4,0,0,6.2832); ctx.fill();
+    ctx.fillStyle=dark?'#ffffff':'#b3202c'; circle(p.x,p.y,r); ctx.strokeStyle=dark?'rgba(0,0,0,.4)':'rgba(255,255,255,.7)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(p.x,p.y,r,0.4,2.2); ctx.stroke(); }
+  for(const p of G.particles){ ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle=p.c; ctx.fillRect(-4,-2,8,4); ctx.restore(); }
+}
+
+/* ---------- boot ---------- */
+let last=0;
+function frame(t){ const dt=Math.min(0.05,(t-last)/1000||0); last=t; update(dt); draw(); requestAnimationFrame(frame); }
+function start(){ menu(); requestAnimationFrame(frame); }
+if(window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start();
+</script>
